@@ -1,12 +1,11 @@
 use gtk::prelude::*;
 use gtk::Application;
 
-mod design;
-mod styles;
+use super::design;
 
-fn main() {
+pub fn show_view() {
     let app = Application::builder()
-        .application_id("Proyect 2.Modelado.y.Programacion")
+        .application_id("com.modelado.proyecto2")
         .build();
 
     app.connect_activate(design::design_app);

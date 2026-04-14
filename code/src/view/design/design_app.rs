@@ -10,7 +10,7 @@ use gtk::{
     SearchEntry,
 };
 
-use crate::styles;
+use crate::view::styles;
 
 
 pub fn design_app(app: &Application) {
