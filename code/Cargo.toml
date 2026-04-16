@@ -7,3 +7,4 @@ edition = "2024"
 gtk = { version = "0.11.1", package = "gtk4", features = ["v4_14"] }
 walkdir = "2"
 id3 = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
