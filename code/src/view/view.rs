@@ -3,12 +3,33 @@ use gtk::Application;
 
 use super::design;
 
-pub fn show_view() {
+#[derive(Clone, Debug)]
+pub struct SongViewData {
+    pub title: String,
+    pub path: String,
+    pub track: Option<i64>,
+    pub year: Option<i64>,
+    pub genre: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AlbumViewData {
+    pub id_album: i64,
+    pub name: String,
+    pub path: String,
+    pub year: Option<i64>,
+    pub songs: i64,
+    pub song_list: Vec<SongViewData>,
+}
+
+pub fn show_view(albums: Vec<AlbumViewData>) {
     let app = Application::builder()
         .application_id("com.modelado.proyecto2")
         .build();
 
-    app.connect_activate(design::design_app);
+    app.connect_activate(move |app| {
+        design::design_app(app, albums.clone());
+    });
 
     app.run();
 }

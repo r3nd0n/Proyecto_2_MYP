@@ -4,16 +4,94 @@ use gtk::{
     Application, 
     ApplicationWindow,
     Button,
+    GestureClick,
     Box as GtkBox,
     Label,
     Orientation,
+    PolicyType,
+    ScrolledWindow,
     SearchEntry,
 };
 
+use crate::view::view::AlbumViewData;
 use crate::view::styles;
 
+fn clear_children(container: &GtkBox) {
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+}
 
-pub fn design_app(app: &Application) {
+fn render_album_detail(target: &GtkBox, album: &AlbumViewData) {
+    clear_children(target);
+
+    let header = Label::new(Some(&album.name));
+    header.set_halign(Align::Start);
+    header.add_css_class("album-detail-title");
+
+    let album_meta = format!(
+        "Id: {} | {} | {} canciones",
+        album.id_album,
+        album
+            .year
+            .map(|year| year.to_string())
+            .unwrap_or_else(|| "Sin anio".to_string()),
+        album.songs
+    );
+    let meta = Label::new(Some(&album_meta));
+    meta.set_halign(Align::Start);
+
+    let path = Label::new(Some(&album.path));
+    path.set_halign(Align::Start);
+    path.set_wrap(true);
+
+    target.append(&header);
+    target.append(&meta);
+    target.append(&path);
+
+    let songs_title = Label::new(Some("Canciones"));
+    songs_title.set_halign(Align::Start);
+    songs_title.add_css_class("album-songs-title");
+    target.append(&songs_title);
+
+    if album.song_list.is_empty() {
+        let empty = Label::new(Some("Este album no tiene canciones registradas."));
+        empty.set_halign(Align::Start);
+        target.append(&empty);
+        return;
+    }
+
+    for song in &album.song_list {
+        let song_row = GtkBox::new(Orientation::Vertical, 2);
+        song_row.add_css_class("song-row");
+
+        let title_text = match song.track {
+            Some(track) => format!("{:02}. {}", track, song.title),
+            None => song.title.clone(),
+        };
+        let title = Label::new(Some(&title_text));
+        title.set_halign(Align::Start);
+
+        let detail_text = format!(
+            "{} | {} | {}",
+            song.year
+                .map(|year| year.to_string())
+                .unwrap_or_else(|| "Sin anio".to_string()),
+            song.genre.clone().unwrap_or_else(|| "Sin genero".to_string()),
+            song.path
+        );
+        let detail = Label::new(Some(&detail_text));
+        detail.set_halign(Align::Start);
+        detail.set_wrap(true);
+
+        song_row.append(&title);
+        song_row.append(&detail);
+        target.append(&song_row);
+    }
+}
+
+
+pub fn design_app(app: &Application, albums: Vec<AlbumViewData>) {
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -52,10 +130,77 @@ pub fn design_app(app: &Application) {
 
     let spacer_inner_mid_left= GtkBox::new(Orientation::Vertical,12);
     spacer_inner_mid_left.set_size_request(350, 30);
+
+    let albums_list = GtkBox::new(Orientation::Vertical, 8);
+    albums_list.set_hexpand(true);
+    albums_list.set_vexpand(true);
+
+    let detail_content = GtkBox::new(Orientation::Vertical, 8);
+    detail_content.set_hexpand(true);
+    detail_content.set_vexpand(true);
+
+    let detail_scroll = ScrolledWindow::new();
+    detail_scroll.set_policy(PolicyType::Never, PolicyType::Automatic);
+    detail_scroll.set_hexpand(true);
+    detail_scroll.set_vexpand(true);
+    detail_scroll.set_child(Some(&detail_content));
+
+    if albums.is_empty() {
+        let empty = Label::new(Some("No hay albumes minados todavia"));
+        empty.set_halign(Align::Start);
+        albums_list.append(&empty);
+
+        let empty_detail = Label::new(Some("Selecciona un album para ver su detalle."));
+        empty_detail.set_halign(Align::Start);
+        detail_content.append(&empty_detail);
+    } else {
+        render_album_detail(&detail_content, &albums[0]);
+
+        for album in albums {
+            let album_row = GtkBox::new(Orientation::Vertical, 2);
+            album_row.add_css_class("album-row");
+
+            let title = Label::new(Some(&album.name));
+            title.set_halign(Align::Start);
+
+            let detail_text = format!(
+                "{} | {} canciones | {}",
+                album.year
+                    .map(|year| year.to_string())
+                    .unwrap_or_else(|| "Sin anio".to_string()),
+                album.songs,
+                album.path
+            );
+            let detail = Label::new(Some(&detail_text));
+            detail.set_halign(Align::Start);
+            detail.set_wrap(true);
+
+            album_row.append(&title);
+            album_row.append(&detail);
+
+            let detail_panel = detail_content.clone();
+            let album_data = album.clone();
+            let click = GestureClick::new();
+            click.connect_pressed(move |_, _, _, _| {
+                render_album_detail(&detail_panel, &album_data);
+            });
+            album_row.add_controller(click);
+
+            albums_list.append(&album_row);
+        }
+    }
+
+    let album_scroll = ScrolledWindow::new();
+    album_scroll.set_policy(PolicyType::Never, PolicyType::Automatic);
+    album_scroll.set_hexpand(true);
+    album_scroll.set_vexpand(true);
+    album_scroll.set_child(Some(&albums_list));
     
     let container_inner_mid_right= GtkBox::new(Orientation::Horizontal,12);
     container_inner_mid_right.set_hexpand(true);
-    container_inner_mid_right.add_css_class("mid-box-left");
+    container_inner_mid_right.set_vexpand(true);
+    container_inner_mid_right.add_css_class("mid-box-right");
+    container_inner_mid_right.append(&detail_scroll);
 
     //
     // BOTTOM
@@ -83,7 +228,7 @@ pub fn design_app(app: &Application) {
     spacer.set_hexpand(true);
 
     // ETIQUETAS
-    let label_lib = Label::new(Some("Tu Biblioteca"));
+    let label_lib = Label::new(Some("Tus Albums"));
     label_lib.set_halign(Align::Center);
 
     // CONTAINERS
@@ -94,6 +239,7 @@ pub fn design_app(app: &Application) {
 
     spacer_inner_mid_left.append(&label_lib);
     container_inner_mid_left.append(&spacer_inner_mid_left);
+    container_inner_mid_left.append(&album_scroll);
     container_mid.append(&container_inner_mid_left);
     container_mid.append(&container_inner_mid_right);
     
