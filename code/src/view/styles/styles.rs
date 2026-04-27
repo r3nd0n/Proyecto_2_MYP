@@ -20,6 +20,7 @@ pub fn apply_styles() {
         .button-mine:hover { background: #A19F9F; color: #141414; }\
         .button-mine label { color: #C4C4C4; }\
         .button-mine:hover label { color: #141414; }\
+        .mine-description { color: #000000; }\
         .bottom-box { background: #141414; border-radius: 8px; padding: 10px; }"
     );
 

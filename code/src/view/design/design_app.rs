@@ -12,8 +12,10 @@ use gtk::{
     ScrolledWindow,
     SearchEntry,
 };
+use std::rc::Rc;
 
 use crate::view::view::AlbumViewData;
+use super::mine_route;
 use crate::view::styles;
 
 fn clear_children(container: &GtkBox) {
@@ -90,8 +92,64 @@ fn render_album_detail(target: &GtkBox, album: &AlbumViewData) {
     }
 }
 
+fn render_albums_list(albums_list: &GtkBox, detail_content: &GtkBox, albums: &[AlbumViewData]) {
+    clear_children(albums_list);
+    clear_children(detail_content);
 
-pub fn design_app(app: &Application, albums: Vec<AlbumViewData>) {
+    if albums.is_empty() {
+        let empty = Label::new(Some("No hay albumes minados todavia"));
+        empty.set_halign(Align::Start);
+        albums_list.append(&empty);
+
+        let empty_detail = Label::new(Some("Selecciona un album para ver su detalle."));
+        empty_detail.set_halign(Align::Start);
+        detail_content.append(&empty_detail);
+        return;
+    }
+
+    render_album_detail(detail_content, &albums[0]);
+
+    for album in albums {
+        let album_row = GtkBox::new(Orientation::Vertical, 2);
+        album_row.add_css_class("album-row");
+
+        let title = Label::new(Some(&album.name));
+        title.set_halign(Align::Start);
+
+        let detail_text = format!(
+            "{} | {} canciones | {}",
+            album
+                .year
+                .map(|year| year.to_string())
+                .unwrap_or_else(|| "Sin anio".to_string()),
+            album.songs,
+            album.path
+        );
+        let detail = Label::new(Some(&detail_text));
+        detail.set_halign(Align::Start);
+        detail.set_wrap(true);
+
+        album_row.append(&title);
+        album_row.append(&detail);
+
+        let detail_panel = detail_content.clone();
+        let album_data = album.clone();
+        let click = GestureClick::new();
+        click.connect_pressed(move |_, _, _, _| {
+            render_album_detail(&detail_panel, &album_data);
+        });
+        album_row.add_controller(click);
+
+        albums_list.append(&album_row);
+    }
+}
+
+
+pub fn design_app(
+    app: &Application,
+    albums: Vec<AlbumViewData>,
+    on_mine: Rc<dyn Fn(String) -> Vec<AlbumViewData>>,
+) {
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -145,50 +203,7 @@ pub fn design_app(app: &Application, albums: Vec<AlbumViewData>) {
     detail_scroll.set_vexpand(true);
     detail_scroll.set_child(Some(&detail_content));
 
-    if albums.is_empty() {
-        let empty = Label::new(Some("No hay albumes minados todavia"));
-        empty.set_halign(Align::Start);
-        albums_list.append(&empty);
-
-        let empty_detail = Label::new(Some("Selecciona un album para ver su detalle."));
-        empty_detail.set_halign(Align::Start);
-        detail_content.append(&empty_detail);
-    } else {
-        render_album_detail(&detail_content, &albums[0]);
-
-        for album in albums {
-            let album_row = GtkBox::new(Orientation::Vertical, 2);
-            album_row.add_css_class("album-row");
-
-            let title = Label::new(Some(&album.name));
-            title.set_halign(Align::Start);
-
-            let detail_text = format!(
-                "{} | {} canciones | {}",
-                album.year
-                    .map(|year| year.to_string())
-                    .unwrap_or_else(|| "Sin anio".to_string()),
-                album.songs,
-                album.path
-            );
-            let detail = Label::new(Some(&detail_text));
-            detail.set_halign(Align::Start);
-            detail.set_wrap(true);
-
-            album_row.append(&title);
-            album_row.append(&detail);
-
-            let detail_panel = detail_content.clone();
-            let album_data = album.clone();
-            let click = GestureClick::new();
-            click.connect_pressed(move |_, _, _, _| {
-                render_album_detail(&detail_panel, &album_data);
-            });
-            album_row.add_controller(click);
-
-            albums_list.append(&album_row);
-        }
-    }
+    render_albums_list(&albums_list, &detail_content, &albums);
 
     let album_scroll = ScrolledWindow::new();
     album_scroll.set_policy(PolicyType::Never, PolicyType::Automatic);
@@ -212,8 +227,26 @@ pub fn design_app(app: &Application, albums: Vec<AlbumViewData>) {
 
     // BUTTONS
     let miner_btn = Button::with_label("Minar");
-    miner_btn.connect_clicked(|_| {
-        // Aquí se debe abrir la otra ventana de minado.
+    let app_for_mine = app.clone();
+    let albums_list_for_refresh = albums_list.clone();
+    let detail_content_for_refresh = detail_content.clone();
+    let on_mine_for_click = on_mine.clone();
+    miner_btn.connect_clicked(move |_| {
+        let on_mine_for_window = on_mine_for_click.clone();
+        let albums_list_for_window = albums_list_for_refresh.clone();
+        let detail_content_for_window = detail_content_for_refresh.clone();
+
+        mine_route::open_mine_window(
+            &app_for_mine,
+            Rc::new(move |route| {
+                let refreshed_albums = on_mine_for_window(route);
+                render_albums_list(
+                    &albums_list_for_window,
+                    &detail_content_for_window,
+                    &refreshed_albums,
+                );
+            }),
+        );
     });
     miner_btn.add_css_class("button-mine");
     miner_btn.set_halign(Align::End);
@@ -222,6 +255,7 @@ pub fn design_app(app: &Application, albums: Vec<AlbumViewData>) {
     search_box.set_size_request(350,30);
     search_box.set_hexpand(false);
     search_box.set_halign(Align::Fill);
+    search_box.set_placeholder_text(Some("Qué quieres escuchar?"));
     search_box.add_css_class("search-box");
 
     let spacer = GtkBox::new(Orientation::Horizontal, 0);

@@ -38,54 +38,7 @@ pub fn create_db(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn get_or_create_performer(conn: &Connection, artist: &str) -> Result<i64> {
-    if let Some(id) = conn
-        .query_row(
-            "SELECT id_performer FROM performers WHERE name = ?1 LIMIT 1",
-            [artist],
-            |row| row.get(0),
-        )
-        .optional()?
-    {
-        return Ok(id);
-    }
 
-    let id_type = if artist == "Unknown" { 2 } else { 0 };
-    conn.execute(
-        "INSERT INTO performers (id_type, name) VALUES (?1, ?2)",
-        params![id_type, artist],
-    )?;
-    Ok(conn.last_insert_rowid())
-}
-
-fn get_or_create_album(conn: &Connection, song: &SongTag) -> Result<i64> {
-    let album_path = Path::new(&song.file_path)
-        .parent()
-        .map(|value| value.display().to_string())
-        .unwrap_or_else(|| "Unknown".to_string());
-
-    if let Some(id) = conn
-        .query_row(
-            "SELECT id_album
-             FROM albums
-             WHERE path = ?1
-               AND name = ?2
-               AND (year = ?3 OR (year IS NULL AND ?3 IS NULL))
-             LIMIT 1",
-            params![album_path, song.album, song.year],
-            |row| row.get(0),
-        )
-        .optional()?
-    {
-        return Ok(id);
-    }
-
-    conn.execute(
-        "INSERT INTO albums (path, name, year) VALUES (?1, ?2, ?3)",
-        params![album_path, song.album, song.year],
-    )?;
-    Ok(conn.last_insert_rowid())
-}
 
 pub fn upsert_song(conn: &Connection, song: &SongTag) -> Result<()> {
     let performer_id = get_or_create_performer(conn, &song.artist)?;
@@ -202,4 +155,53 @@ pub fn get_albums_with_songs(conn: &Connection) -> Result<Vec<AlbumWithSongs>> {
     }
 
     Ok(result)
+}
+
+fn get_or_create_performer(conn: &Connection, artist: &str) -> Result<i64> {
+    if let Some(id) = conn
+        .query_row(
+            "SELECT id_performer FROM performers WHERE name = ?1 LIMIT 1",
+            [artist],
+            |row| row.get(0),
+        )
+        .optional()?
+    {
+        return Ok(id);
+    }
+
+    let id_type = if artist == "Unknown" { 2 } else { 0 };
+    conn.execute(
+        "INSERT INTO performers (id_type, name) VALUES (?1, ?2)",
+        params![id_type, artist],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn get_or_create_album(conn: &Connection, song: &SongTag) -> Result<i64> {
+    let album_path = Path::new(&song.file_path)
+        .parent()
+        .map(|value| value.display().to_string())
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    if let Some(id) = conn
+        .query_row(
+            "SELECT id_album
+             FROM albums
+             WHERE path = ?1
+               AND name = ?2
+               AND (year = ?3 OR (year IS NULL AND ?3 IS NULL))
+             LIMIT 1",
+            params![album_path, song.album, song.year],
+            |row| row.get(0),
+        )
+        .optional()?
+    {
+        return Ok(id);
+    }
+
+    conn.execute(
+        "INSERT INTO albums (path, name, year) VALUES (?1, ?2, ?3)",
+        params![album_path, song.album, song.year],
+    )?;
+    Ok(conn.last_insert_rowid())
 }

@@ -1,5 +1,6 @@
 use gtk::prelude::*;
 use gtk::Application;
+use std::rc::Rc;
 
 use super::design;
 
@@ -22,13 +23,19 @@ pub struct AlbumViewData {
     pub song_list: Vec<SongViewData>,
 }
 
-pub fn show_view(albums: Vec<AlbumViewData>) {
+pub fn show_view<F>(albums: Vec<AlbumViewData>, on_mine: F)
+where
+    F: Fn(String) -> Vec<AlbumViewData> + 'static,
+{
+    let on_mine = Rc::new(on_mine) as Rc<dyn Fn(String) -> Vec<AlbumViewData>>;
+
     let app = Application::builder()
         .application_id("com.modelado.proyecto2")
         .build();
 
+    let on_mine_for_activate = on_mine.clone();
     app.connect_activate(move |app| {
-        design::design_app(app, albums.clone());
+        design::design_app(app, albums.clone(), on_mine_for_activate.clone());
     });
 
     app.run();
