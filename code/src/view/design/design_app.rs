@@ -18,28 +18,40 @@ use crate::view::view::AlbumViewData;
 use super::mine_route;
 use crate::view::styles;
 
+/// Delete all the child widgets from the container.
+/// 
+/// #Arguments
+/// container: the GTK container who all his child widgets
+/// will be eliminated at the end of the function.
 fn clear_children(container: &GtkBox) {
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
 }
 
+/// Actualiza el album de manera detallada en la interfaz
+/// No se crean ventanas nuevas, se reusa target y se relena
+/// con la información.
+/// #Arguments
+/// target: Container GTK donde se van a dibujar los albumes.
+/// album: el album que se va a mostrar.
 fn render_album_detail(target: &GtkBox, album: &AlbumViewData) {
     clear_children(target);
+
+    let artist = Label::new(Some(&album.artist));
+    artist.set_halign(Align::Start);
+    artist.add_css_class("album-artist");
 
     let header = Label::new(Some(&album.name));
     header.set_halign(Align::Start);
     header.add_css_class("album-detail-title");
 
     let album_meta = format!(
-        "Id: {} | {} | {} canciones",
+        "Id: {} \n{} canciones",
         album.id_album,
-        album
-            .year
-            .map(|year| year.to_string())
-            .unwrap_or_else(|| "Sin anio".to_string()),
         album.songs
     );
+
     let meta = Label::new(Some(&album_meta));
     meta.set_halign(Align::Start);
 
@@ -48,8 +60,9 @@ fn render_album_detail(target: &GtkBox, album: &AlbumViewData) {
     path.set_wrap(true);
 
     target.append(&header);
+    target.append(&artist);
     target.append(&meta);
-    target.append(&path);
+    //target.append(&path);
 
     let songs_title = Label::new(Some("Canciones"));
     songs_title.set_halign(Align::Start);
@@ -75,12 +88,13 @@ fn render_album_detail(target: &GtkBox, album: &AlbumViewData) {
         title.set_halign(Align::Start);
 
         let detail_text = format!(
-            "{} | {} | {}",
-            song.year
-                .map(|year| year.to_string())
-                .unwrap_or_else(|| "Sin anio".to_string()),
+            "{} \n{}",
+            //song.year
+            //    .map(|year| year.to_string())
+            //    .unwrap_or_else(|| "Sin anio".to_string()),
             song.genre.clone().unwrap_or_else(|| "Sin genero".to_string()),
-            song.path
+            album.artist,
+            //song.path
         );
         let detail = Label::new(Some(&detail_text));
         detail.set_halign(Align::Start);
@@ -117,13 +131,10 @@ fn render_albums_list(albums_list: &GtkBox, detail_content: &GtkBox, albums: &[A
         title.set_halign(Align::Start);
 
         let detail_text = format!(
-            "{} | {} canciones | {}",
-            album
-                .year
-                .map(|year| year.to_string())
-                .unwrap_or_else(|| "Sin anio".to_string()),
+            "{} \n{} canciones",
+            album.artist,
             album.songs,
-            album.path
+            //album.path
         );
         let detail = Label::new(Some(&detail_text));
         detail.set_halign(Align::Start);

@@ -1,0 +1,10 @@
+services:
+  app:
+    build: .
+    environment:
+      DISPLAY: ${DISPLAY}
+      DB_PATH: /app/data/music.db
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./data:/app/data
+    network_mode: host

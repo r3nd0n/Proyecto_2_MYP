@@ -9,6 +9,7 @@ pub struct AlbumSummary {
     pub path: String,
     pub year: Option<i64>,
     pub songs: i64,
+    pub artist: String,
 }
 
 #[derive(Clone, Debug)]
@@ -27,6 +28,7 @@ pub struct AlbumWithSongs {
     pub path: String,
     pub year: Option<i64>,
     pub songs: i64,
+    pub artist: String,
     pub song_list: Vec<SongSummary>,
 }
 
@@ -97,7 +99,11 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<AlbumSummary>> {
                 a.name,
                 a.path,
                 a.year,
-                COUNT(r.id_rola) AS songs
+                COUNT(r.id_rola) AS songs,
+                COALESCE((SELECT GROUP_CONCAT(DISTINCT p.name)
+                          FROM rolas r2
+                          LEFT JOIN performers p ON r2.id_performer = p.id_performer
+                          WHERE r2.id_album = a.id_album), 'Unknown') AS artist
          FROM albums a
          LEFT JOIN rolas r ON r.id_album = a.id_album
          GROUP BY a.id_album, a.name, a.path, a.year
@@ -111,6 +117,7 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<AlbumSummary>> {
             path: row.get(2)?,
             year: row.get(3)?,
             songs: row.get(4)?,
+            artist: row.get(5)?,
         })
     })?;
 
@@ -150,6 +157,7 @@ pub fn get_albums_with_songs(conn: &Connection) -> Result<Vec<AlbumWithSongs>> {
             path: album.path,
             year: album.year,
             songs: album.songs,
+            artist: album.artist,
             song_list,
         });
     }

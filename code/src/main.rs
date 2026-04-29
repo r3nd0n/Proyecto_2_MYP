@@ -15,18 +15,19 @@ fn map_albums_to_view(albums: Vec<model::db::AlbumWithSongs>) -> Vec<view::view:
         .into_iter()
         .map(|album| view::view::AlbumViewData {
             id_album: album.id_album,
+            artist: album.artist,
             name: album.name,
             path: album.path,
-            year: album.year,
+            //year: album.year,
             songs: album.songs,
             song_list: album
                 .song_list
                 .into_iter()
                 .map(|song| view::view::SongViewData {
                     title: song.title,
-                    path: song.path,
+                    //path: song.path,
                     track: song.track,
-                    year: song.year,
+                    //year: song.year,
                     genre: song.genre,
                 })
                 .collect(),
@@ -50,6 +51,7 @@ fn main() {
     let albums_view = map_albums_to_view(albums);
 
     let db_path_for_mine = db_path.clone();
+    
     view::view::show_view(albums_view, move |route| {
         let conn = Connection::open(&db_path_for_mine)
             .expect("No se pudo abrir la base de datos para minar");
