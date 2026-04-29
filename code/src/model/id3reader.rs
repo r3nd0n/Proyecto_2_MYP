@@ -19,29 +19,6 @@ pub fn id3_reader(path: &Path) -> Option<SongTag> {
             let track = tag.track().map(|value| value as i32);
             let year = tag.year();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////// Bloque a eliminar, solo es para mostrar que se extraen datos.///////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            println!("Titulo: {}", title);
-            println!("Artista: {}", artist);
-            println!("Album: {}", album);
-            println!("Genero: {}", genre);
-            println!(
-                "Track: {}",
-                track
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "Unknown".to_string())
-            );
-            println!(
-                "Año: {}\n",
-                year
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "Unknown".to_string())
-            );
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
             Some(SongTag {
                 file_path: path.display().to_string(),
                 title,

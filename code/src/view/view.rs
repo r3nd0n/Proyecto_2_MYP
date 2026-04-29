@@ -7,9 +7,7 @@ use super::design;
 #[derive(Clone, Debug)]
 pub struct SongViewData {
     pub title: String,
-    //pub path: String,
     pub track: Option<i64>,
-    //pub year: Option<i64>,
     pub genre: Option<String>,
 }
 
@@ -19,24 +17,27 @@ pub struct AlbumViewData {
     pub artist: String,
     pub name: String,
     pub path: String,
-    //pub year: Option<i64>,
     pub songs: i64,
     pub song_list: Vec<SongViewData>,
 }
 
-pub fn show_view<F>(albums: Vec<AlbumViewData>, on_mine: F)
+pub fn show_view<F>(albums: Vec<AlbumViewData>, on_mine: F, on_search: S)
 where
     F: Fn(String) -> Vec<AlbumViewData> + 'static,
+    S: Fn(crate::view::query::usr_query) -> Vec<AlbumViewData> + 'static,
 {
     let on_mine = Rc::new(on_mine) as Rc<dyn Fn(String) -> Vec<AlbumViewData>>;
+    let on_search = Rc::new(on_search) as Rc<dyn Fn(crate::view::query::usr_query) -> Vec<AlbumViewData>>;
 
     let app = Application::builder()
         .application_id("com.modelado.proyecto2")
         .build();
 
     let on_mine_for_activate = on_mine.clone();
+    let on_search_for_activate = on_search.clone();
+
     app.connect_activate(move |app| {
-        design::design_app(app, albums.clone(), on_mine_for_activate.clone());
+        design::design_app(app, albums.clone(), on_mine_for_activate.clone(), on_search_for_activate.clone());
     });
 
     app.run();

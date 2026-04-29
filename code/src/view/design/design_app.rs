@@ -1,4 +1,5 @@
 use gtk::prelude::*;
+use gtk::subclass::entry;
 use gtk::{
     Align,
     Application, 
@@ -15,6 +16,7 @@ use gtk::{
 use std::rc::Rc;
 
 use crate::view::view::AlbumViewData;
+use crate::view::query::query_generator;
 use super::mine_route;
 use crate::view::styles;
 
@@ -160,6 +162,7 @@ pub fn design_app(
     app: &Application,
     albums: Vec<AlbumViewData>,
     on_mine: Rc<dyn Fn(String) -> Vec<AlbumViewData>>,
+    on_search: Rc<dyn Fn(crate::view::query::usr_query) -> Vec<AlbumViewData>>,
 ) {
 
     let window = ApplicationWindow::builder()
@@ -236,12 +239,13 @@ pub fn design_app(
     container_bottom.set_vexpand(false);
     container_bottom.add_css_class("bottom-box");
 
-    // BUTTONS
+    // BOTON DE MINADO
     let miner_btn = Button::with_label("Minar");
     let app_for_mine = app.clone();
     let albums_list_for_refresh = albums_list.clone();
     let detail_content_for_refresh = detail_content.clone();
     let on_mine_for_click = on_mine.clone();
+
     miner_btn.connect_clicked(move |_| {
         let on_mine_for_window = on_mine_for_click.clone();
         let albums_list_for_window = albums_list_for_refresh.clone();
@@ -262,12 +266,29 @@ pub fn design_app(
     miner_btn.add_css_class("button-mine");
     miner_btn.set_halign(Align::End);
 
+    // BARRA DE BUSQUEDA
     let search_box = SearchEntry::new();
     search_box.set_size_request(350,30);
     search_box.set_hexpand(false);
     search_box.set_halign(Align::Fill);
     search_box.set_placeholder_text(Some("Qué quieres escuchar?"));
     search_box.add_css_class("search-box");
+    
+    let album_list_for_search = albums_list.clone();
+    let detail_content_for_search = detail_content.clone();
+    let all_albums = albums.clone();
+    let on_search_for_click = on_search.clone();
+
+    search_box.connect_search_changed(move |entry|{
+        let search_txt = entry.text().to_string();
+        let query = query_generator(&search_txt);
+        //TODO 
+        //conectar la busqueda que entra el usuario con /model 
+        //mediante main.rs.
+        let refreshed = on_search_for_click(query);
+
+        render_albums_list(&album_list_for_search, &detail_content_for_search, &refreshed);
+    });
 
     let spacer = GtkBox::new(Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
