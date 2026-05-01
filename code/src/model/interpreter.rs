@@ -1,28 +1,108 @@
-use rusqlite::Connection;
-use crate::model::db::AlbumWithSongs;
+use rusqlite::{params_from_iter, Connection, Result};
+use crate::model::db::{self, AlbumSummary, AlbumWithSongs};
 
 #[derive(Debug, Clone)]
 pub struct SearchQuery {
-	pub tokens: Vec<String>,
+	pub artists: Vec<String>,
+	pub albums: Vec<String>,
+	pub songs: Vec<String>,
 }
 
-/// Parse input like "artista & album" or "artista" into a `SearchQuery`.
-pub fn parse_search_input(input: &str) -> SearchQuery {
-	let tokens = input
-		.split('&')
-		.map(|s| s.trim())
-		.filter(|s| !s.is_empty())
-		.map(|s| s.to_string())
-		.collect();
+fn album_query_sql(q: &SearchQuery) -> (String, Vec<String>) {
+	let mut sql = String::from(
+		"SELECT a.id_album,
+		        a.name,
+		        a.path,
+		        a.year,
+		        COUNT(r.id_rola) AS songs,
+		        COALESCE((SELECT GROUP_CONCAT(DISTINCT p.name)
+		                  FROM rolas r2
+		                  LEFT JOIN performers p ON r2.id_performer = p.id_performer
+		                  WHERE r2.id_album = a.id_album), 'Unknown') AS artist
+		 FROM albums a
+		 LEFT JOIN rolas r ON r.id_album = a.id_album"
+	);
+	let mut params = Vec::new();
+	let mut clauses = Vec::new();
 
-	SearchQuery { tokens }
+	if !q.artists.is_empty() {
+		let placeholders = vec!["?"; q.artists.len()].join(", ");
+		clauses.push(format!(
+			"EXISTS (SELECT 1
+			          FROM rolas r_artist
+			          JOIN performers p_artist ON p_artist.id_performer = r_artist.id_performer
+			          WHERE r_artist.id_album = a.id_album
+			            AND p_artist.name COLLATE NOCASE IN ({}))",
+			placeholders
+		));
+		params.extend(q.artists.iter().cloned());
+	}
+
+	if !q.albums.is_empty() {
+		let placeholders = vec!["?"; q.albums.len()].join(", ");
+		clauses.push(format!("a.name COLLATE NOCASE IN ({})", placeholders));
+		params.extend(q.albums.iter().cloned());
+	}
+
+	if !q.songs.is_empty() {
+		let placeholders = vec!["?"; q.songs.len()].join(", ");
+		clauses.push(format!(
+			"EXISTS (SELECT 1
+			          FROM rolas r_song
+			          WHERE r_song.id_album = a.id_album
+			            AND r_song.title COLLATE NOCASE IN ({}))",
+			placeholders
+		));
+		params.extend(q.songs.iter().cloned());
+	}
+
+	if !clauses.is_empty() {
+		sql.push_str(" WHERE ");
+		sql.push_str(&clauses.join(" OR "));
+	}
+
+	sql.push_str(
+		" GROUP BY a.id_album, a.name, a.path, a.year
+		  ORDER BY songs DESC, a.name COLLATE NOCASE ASC",
+	);
+
+	(sql, params)
 }
 
-/// Perform a search against the DB using the provided query.
-///
-/// Nota: implementación pendiente; por ahora provoca `unimplemented!()`
-pub fn search(conn: &Connection, q: &SearchQuery) -> rusqlite::Result<Vec<AlbumWithSongs>> {
-	unimplemented!()
+pub fn search(conn: &Connection, q: &SearchQuery) -> Result<Vec<AlbumWithSongs>> {
+	if q.artists.is_empty() && q.albums.is_empty() && q.songs.is_empty() {
+		return db::get_albums_with_songs(conn);
+	}
+
+	let (sql, params) = album_query_sql(q);
+	let mut stmt = conn.prepare(&sql)?;
+	let rows = stmt.query_map(params_from_iter(params), |row| {
+		Ok(AlbumSummary {
+			id_album: row.get(0)?,
+			name: row.get(1)?,
+			path: row.get(2)?,
+			year: row.get(3)?,
+			songs: row.get(4)?,
+			artist: row.get(5)?,
+		})
+	})?;
+
+	let mut result = Vec::new();
+	for album in rows {
+		let album = album?;
+		let song_list = db::get_songs_for_album(conn, album.id_album)?;
+		result.push(AlbumWithSongs {
+			id_album: album.id_album,
+			name: album.name,
+			path: album.path,
+			year: album.year,
+			songs: album.songs,
+			artist: album.artist,
+			song_list,
+		});
+	}
+
+	Ok(result)
 }
 
 #[cfg(test)]
@@ -44,34 +124,38 @@ mod tests {
 	}
 
 	#[test]
-	fn search_single_token_matches_artist_or_album() -> rusqlite::Result<()> {
+	fn search_matches_artist_and_album_filters() -> rusqlite::Result<()> {
 		let conn = Connection::open_in_memory()?;
 		db::create_db(&conn)?;
 		db::upsert_song(&conn, &sample_song("Nirvana", "Nevermind", "Smells Like Teen Spirit", "/tmp/n1.mp3"))?;
 		db::upsert_song(&conn, &sample_song("Radiohead", "OK Computer", "Paranoid Android", "/tmp/r1.mp3"))?;
 
-		let q = SearchQuery { tokens: vec!["Nirvana".to_string()] };
-		let res = search(&conn, &q);
-		// La implementación está pendiente; solo comprobamos que la función existe y devuelve Result
-		assert!(res.is_err() || res.is_ok());
+		let q = SearchQuery {
+			artists: vec!["Nirvana".to_string()],
+			albums: vec![],
+			songs: vec![],
+		};
+		let res = search(&conn, &q)?;
+		assert_eq!(res.len(), 1);
+		assert_eq!(res[0].artist, "Nirvana");
 		Ok(())
 	}
 
 	#[test]
-	fn search_two_tokens_artist_and_album_or_two_artists() -> rusqlite::Result<()> {
+	fn search_can_mix_artists_and_albums() -> rusqlite::Result<()> {
 		let conn = Connection::open_in_memory()?;
 		db::create_db(&conn)?;
 		db::upsert_song(&conn, &sample_song("Nirvana", "Nevermind", "In Bloom", "/tmp/n2.mp3"))?;
 		db::upsert_song(&conn, &sample_song("Nirvana", "Bleach", "About a Girl", "/tmp/n3.mp3"))?;
 		db::upsert_song(&conn, &sample_song("Pearl Jam", "Ten", "Alive", "/tmp/p1.mp3"))?;
 
-		let q1 = SearchQuery { tokens: vec!["Nirvana".to_string(), "Nevermind".to_string()] };
-		let res1 = search(&conn, &q1);
-		assert!(res1.is_err() || res1.is_ok());
-
-		let q2 = SearchQuery { tokens: vec!["Nirvana".to_string(), "Nirvana".to_string()] };
-		let res2 = search(&conn, &q2);
-		assert!(res2.is_err() || res2.is_ok());
+		let q = SearchQuery {
+			artists: vec!["Nirvana".to_string()],
+			albums: vec!["Ten".to_string()],
+			songs: vec![],
+		};
+		let res = search(&conn, &q)?;
+		assert_eq!(res.len(), 3);
 
 		Ok(())
 	}

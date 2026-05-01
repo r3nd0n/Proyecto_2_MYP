@@ -21,7 +21,7 @@ pub struct AlbumViewData {
     pub song_list: Vec<SongViewData>,
 }
 
-pub fn show_view<F>(albums: Vec<AlbumViewData>, on_mine: F, on_search: S)
+pub fn show_view<F, S>(albums: Vec<AlbumViewData>, on_mine: F, on_search: S)
 where
     F: Fn(String) -> Vec<AlbumViewData> + 'static,
     S: Fn(crate::view::query::usr_query) -> Vec<AlbumViewData> + 'static,

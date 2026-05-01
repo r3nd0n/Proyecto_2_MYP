@@ -51,6 +51,24 @@ fn main() {
     let albums_view = map_albums_to_view(albums);
 
     let db_path_for_mine = db_path.clone();
+    let db_path_for_search = db_path.clone();
+
+    let on_search = move |query: view::query::usr_query| {
+        let conn = Connection::open(&db_path_for_search)
+            .expect("No se pudo abrir la base de datos para buscar");
+        model::db::create_db(&conn)
+            .expect("No se pudo asegurar el esquema antes de la busqueda");
+
+        let search_query = model::interpreter::SearchQuery {
+            artists: query.artists,
+            albums: query.albums,
+            songs: query.songs,
+        };
+
+        let matched_albums = model::interpreter::search(&conn, &search_query)
+            .expect("No se pudo ejecutar la busqueda");
+        map_albums_to_view(matched_albums)
+    };
     
     view::view::show_view(albums_view, move |route| {
         let conn = Connection::open(&db_path_for_mine)
@@ -64,5 +82,5 @@ fn main() {
         let refreshed_albums = model::db::get_albums_with_songs(&conn)
             .expect("No se pudieron recargar los albumes despues del minado");
         map_albums_to_view(refreshed_albums)
-    });
+    }, on_search);
 }
