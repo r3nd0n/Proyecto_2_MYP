@@ -1,5 +1,4 @@
 use gtk::prelude::*;
-use gtk::subclass::entry;
 use gtk::{
     Align,
     Application, 
@@ -162,7 +161,7 @@ pub fn design_app(
     app: &Application,
     albums: Vec<AlbumViewData>,
     on_mine: Rc<dyn Fn(String) -> Vec<AlbumViewData>>,
-    on_search: Rc<dyn Fn(crate::view::query::usr_query) -> Vec<AlbumViewData>>,
+    on_search: Rc<dyn Fn(crate::view::query::UsrQuery) -> Vec<AlbumViewData>>,
 ) {
 
     let window = ApplicationWindow::builder()
@@ -276,7 +275,6 @@ pub fn design_app(
     
     let album_list_for_search = albums_list.clone();
     let detail_content_for_search = detail_content.clone();
-    let all_albums = albums.clone();
     let on_search_for_click = on_search.clone();
 
     search_box.connect_search_changed(move |entry|{

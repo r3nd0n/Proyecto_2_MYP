@@ -7,7 +7,6 @@ pub struct AlbumSummary {
     pub id_album: i64,
     pub name: String,
     pub path: String,
-    pub year: Option<i64>,
     pub songs: i64,
     pub artist: String,
 }
@@ -15,9 +14,7 @@ pub struct AlbumSummary {
 #[derive(Clone, Debug)]
 pub struct SongSummary {
     pub title: String,
-    pub path: String,
     pub track: Option<i64>,
-    pub year: Option<i64>,
     pub genre: Option<String>,
 }
 
@@ -26,7 +23,6 @@ pub struct AlbumWithSongs {
     pub id_album: i64,
     pub name: String,
     pub path: String,
-    pub year: Option<i64>,
     pub songs: i64,
     pub artist: String,
     pub song_list: Vec<SongSummary>,
@@ -115,7 +111,6 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<AlbumSummary>> {
             id_album: row.get(0)?,
             name: row.get(1)?,
             path: row.get(2)?,
-            year: row.get(3)?,
             songs: row.get(4)?,
             artist: row.get(5)?,
         })
@@ -135,9 +130,7 @@ pub fn get_songs_for_album(conn: &Connection, album_id: i64) -> Result<Vec<SongS
     let rows = stmt.query_map([album_id], |row| {
         Ok(SongSummary {
             title: row.get(0)?,
-            path: row.get(1)?,
             track: row.get(2)?,
-            year: row.get(3)?,
             genre: row.get(4)?,
         })
     })?;
@@ -155,7 +148,6 @@ pub fn get_albums_with_songs(conn: &Connection) -> Result<Vec<AlbumWithSongs>> {
             id_album: album.id_album,
             name: album.name,
             path: album.path,
-            year: album.year,
             songs: album.songs,
             artist: album.artist,
             song_list,

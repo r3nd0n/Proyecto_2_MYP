@@ -1,64 +1,73 @@
 use rusqlite::{params_from_iter, Connection, Result};
 use crate::model::db::{self, AlbumSummary, AlbumWithSongs};
 
-#[derive(Debug, Clone)]
-pub struct SearchQuery {
-	pub artists: Vec<String>,
-	pub albums: Vec<String>,
-	pub songs: Vec<String>,
-}
-
-fn album_query_sql(q: &SearchQuery) -> (String, Vec<String>) {
+fn album_query_sql_from_input(input: &str) -> (String, Vec<String>) {
 	let mut sql = String::from(
 		"SELECT a.id_album,
-		        a.name,
-		        a.path,
-		        a.year,
-		        COUNT(r.id_rola) AS songs,
-		        COALESCE((SELECT GROUP_CONCAT(DISTINCT p.name)
-		                  FROM rolas r2
-		                  LEFT JOIN performers p ON r2.id_performer = p.id_performer
-		                  WHERE r2.id_album = a.id_album), 'Unknown') AS artist
+				a.name,
+				a.path,
+				a.year,
+				COUNT(r.id_rola) AS songs,
+				COALESCE((SELECT GROUP_CONCAT(DISTINCT p.name)
+						  FROM rolas r2
+						  LEFT JOIN performers p ON r2.id_performer = p.id_performer
+						  WHERE r2.id_album = a.id_album), 'Unknown') AS artist
 		 FROM albums a
 		 LEFT JOIN rolas r ON r.id_album = a.id_album"
 	);
-	let mut params = Vec::new();
-	let mut clauses = Vec::new();
 
-	if !q.artists.is_empty() {
-		let placeholders = vec!["?"; q.artists.len()].join(", ");
-		clauses.push(format!(
-			"EXISTS (SELECT 1
-			          FROM rolas r_artist
-			          JOIN performers p_artist ON p_artist.id_performer = r_artist.id_performer
-			          WHERE r_artist.id_album = a.id_album
-			            AND p_artist.name COLLATE NOCASE IN ({}))",
-			placeholders
-		));
-		params.extend(q.artists.iter().cloned());
+	let mut params: Vec<String> = Vec::new();
+	let mut group_clauses: Vec<String> = Vec::new();
+
+	for raw_group in input.split('&') {
+		let mut token_clauses: Vec<String> = Vec::new();
+
+		for token in raw_group.split(',') {
+			let value = token.trim();
+			if value.is_empty() {
+				continue;
+			}
+
+			let lower = value.to_lowercase();
+
+			if lower.starts_with("ar:") {
+				let v = value["ar:".len()..].trim().to_string();
+				if !v.is_empty() {
+					token_clauses.push("EXISTS (SELECT 1
+						  FROM rolas r_artist
+						  JOIN performers p_artist ON p_artist.id_performer = r_artist.id_performer
+						  WHERE r_artist.id_album = a.id_album
+							AND p_artist.name COLLATE NOCASE = ?)
+						".to_string());
+					params.push(v);
+				}
+			} else if lower.starts_with("al:") {
+				let v = value["al:".len()..].trim().to_string();
+				if !v.is_empty() {
+					token_clauses.push("a.name COLLATE NOCASE = ?".to_string());
+					params.push(v);
+				}
+			} else if lower.starts_with("ca:") {
+				let v = value["ca:".len()..].trim().to_string();
+				if !v.is_empty() {
+					token_clauses.push("EXISTS (SELECT 1
+						  FROM rolas r_song
+						  WHERE r_song.id_album = a.id_album
+							AND r_song.title COLLATE NOCASE = ?)
+						".to_string());
+					params.push(v);
+				}
+			}
+		}
+
+		if !token_clauses.is_empty() {
+			group_clauses.push(format!("({})", token_clauses.join(" OR ")));
+		}
 	}
 
-	if !q.albums.is_empty() {
-		let placeholders = vec!["?"; q.albums.len()].join(", ");
-		clauses.push(format!("a.name COLLATE NOCASE IN ({})", placeholders));
-		params.extend(q.albums.iter().cloned());
-	}
-
-	if !q.songs.is_empty() {
-		let placeholders = vec!["?"; q.songs.len()].join(", ");
-		clauses.push(format!(
-			"EXISTS (SELECT 1
-			          FROM rolas r_song
-			          WHERE r_song.id_album = a.id_album
-			            AND r_song.title COLLATE NOCASE IN ({}))",
-			placeholders
-		));
-		params.extend(q.songs.iter().cloned());
-	}
-
-	if !clauses.is_empty() {
+	if !group_clauses.is_empty() {
 		sql.push_str(" WHERE ");
-		sql.push_str(&clauses.join(" OR "));
+		sql.push_str(&group_clauses.join(" AND "));
 	}
 
 	sql.push_str(
@@ -69,19 +78,15 @@ fn album_query_sql(q: &SearchQuery) -> (String, Vec<String>) {
 	(sql, params)
 }
 
-pub fn search(conn: &Connection, q: &SearchQuery) -> Result<Vec<AlbumWithSongs>> {
-	if q.artists.is_empty() && q.albums.is_empty() && q.songs.is_empty() {
-		return db::get_albums_with_songs(conn);
-	}
-
-	let (sql, params) = album_query_sql(q);
+pub fn search_from_raw(conn: &Connection, raw: &str) -> Result<Vec<AlbumWithSongs>> {
+	let (sql, params) = album_query_sql_from_input(raw);
 	let mut stmt = conn.prepare(&sql)?;
-	let rows = stmt.query_map(params_from_iter(params), |row| {
+	let rows = stmt.query_map(params_from_iter(params.clone()), |row| {
+		let _ignored_year: Option<i64> = row.get(3)?;
 		Ok(AlbumSummary {
 			id_album: row.get(0)?,
 			name: row.get(1)?,
 			path: row.get(2)?,
-			year: row.get(3)?,
 			songs: row.get(4)?,
 			artist: row.get(5)?,
 		})
@@ -95,7 +100,6 @@ pub fn search(conn: &Connection, q: &SearchQuery) -> Result<Vec<AlbumWithSongs>>
 			id_album: album.id_album,
 			name: album.name,
 			path: album.path,
-			year: album.year,
 			songs: album.songs,
 			artist: album.artist,
 			song_list,
@@ -124,38 +128,28 @@ mod tests {
 	}
 
 	#[test]
-	fn search_matches_artist_and_album_filters() -> rusqlite::Result<()> {
+	fn search_from_raw_matches_artist_and_album_filters() -> rusqlite::Result<()> {
 		let conn = Connection::open_in_memory()?;
 		db::create_db(&conn)?;
 		db::upsert_song(&conn, &sample_song("Nirvana", "Nevermind", "Smells Like Teen Spirit", "/tmp/n1.mp3"))?;
 		db::upsert_song(&conn, &sample_song("Radiohead", "OK Computer", "Paranoid Android", "/tmp/r1.mp3"))?;
 
-		let q = SearchQuery {
-			artists: vec!["Nirvana".to_string()],
-			albums: vec![],
-			songs: vec![],
-		};
-		let res = search(&conn, &q)?;
+		let res = search_from_raw(&conn, "ar: Nirvana")?;
 		assert_eq!(res.len(), 1);
 		assert_eq!(res[0].artist, "Nirvana");
 		Ok(())
 	}
 
 	#[test]
-	fn search_can_mix_artists_and_albums() -> rusqlite::Result<()> {
+	fn search_from_raw_applies_and_between_groups() -> rusqlite::Result<()> {
 		let conn = Connection::open_in_memory()?;
 		db::create_db(&conn)?;
-		db::upsert_song(&conn, &sample_song("Nirvana", "Nevermind", "In Bloom", "/tmp/n2.mp3"))?;
-		db::upsert_song(&conn, &sample_song("Nirvana", "Bleach", "About a Girl", "/tmp/n3.mp3"))?;
-		db::upsert_song(&conn, &sample_song("Pearl Jam", "Ten", "Alive", "/tmp/p1.mp3"))?;
+		db::upsert_song(&conn, &sample_song("Red Hot Chili Peppers", "Californication", "Californication", "/tmp/rhcp.mp3"))?;
+		db::upsert_song(&conn, &sample_song("Red Hot Chili Peppers", "Blood Sugar Sex Magik", "Under the Bridge", "/tmp/rhcp2.mp3"))?;
 
-		let q = SearchQuery {
-			artists: vec!["Nirvana".to_string()],
-			albums: vec!["Ten".to_string()],
-			songs: vec![],
-		};
-		let res = search(&conn, &q)?;
-		assert_eq!(res.len(), 3);
+		let res = search_from_raw(&conn, "ar: Red Hot Chili Peppers & al: Californication")?;
+		assert_eq!(res.len(), 1);
+		assert_eq!(res[0].name, "Californication");
 
 		Ok(())
 	}

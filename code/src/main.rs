@@ -53,19 +53,13 @@ fn main() {
     let db_path_for_mine = db_path.clone();
     let db_path_for_search = db_path.clone();
 
-    let on_search = move |query: view::query::usr_query| {
+    let on_search = move |query: view::query::UsrQuery| {
         let conn = Connection::open(&db_path_for_search)
             .expect("No se pudo abrir la base de datos para buscar");
         model::db::create_db(&conn)
             .expect("No se pudo asegurar el esquema antes de la busqueda");
 
-        let search_query = model::interpreter::SearchQuery {
-            artists: query.artists,
-            albums: query.albums,
-            songs: query.songs,
-        };
-
-        let matched_albums = model::interpreter::search(&conn, &search_query)
+        let matched_albums = model::interpreter::search_from_raw(&conn, &query.raw)
             .expect("No se pudo ejecutar la busqueda");
         map_albums_to_view(matched_albums)
     };

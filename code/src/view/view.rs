@@ -24,10 +24,10 @@ pub struct AlbumViewData {
 pub fn show_view<F, S>(albums: Vec<AlbumViewData>, on_mine: F, on_search: S)
 where
     F: Fn(String) -> Vec<AlbumViewData> + 'static,
-    S: Fn(crate::view::query::usr_query) -> Vec<AlbumViewData> + 'static,
+    S: Fn(crate::view::query::UsrQuery) -> Vec<AlbumViewData> + 'static,
 {
     let on_mine = Rc::new(on_mine) as Rc<dyn Fn(String) -> Vec<AlbumViewData>>;
-    let on_search = Rc::new(on_search) as Rc<dyn Fn(crate::view::query::usr_query) -> Vec<AlbumViewData>>;
+    let on_search = Rc::new(on_search) as Rc<dyn Fn(crate::view::query::UsrQuery) -> Vec<AlbumViewData>>;
 
     let app = Application::builder()
         .application_id("com.modelado.proyecto2")
