@@ -21,6 +21,19 @@ pub struct AlbumViewData {
     pub song_list: Vec<SongViewData>,
 }
 
+/// Inicia la aplicacion GTK y muestra la vista principal.
+///
+/// Recibe los albumes iniciales y dos callbacks:
+/// on_mine: ejecuta el proceso de minado y devuelve albumes actualizados.
+/// on_search: ejecuta una busqueda y devuelve los resultados para renderizar.
+///
+/// Los callbacks se envuelven en Rc para poder clonarlos y usarlos dentro del
+/// closure de activacion de GTK.
+///
+/// # Arguments
+/// albums: Datos iniciales de albumes a mostrar en la UI.
+/// on_mine: Funcion para refrescar datos despues del minado.
+/// on_search: Funcion para resolver busquedas desde la UI.
 pub fn show_view<F, S>(albums: Vec<AlbumViewData>, on_mine: F, on_search: S)
 where
     F: Fn(String) -> Vec<AlbumViewData> + 'static,

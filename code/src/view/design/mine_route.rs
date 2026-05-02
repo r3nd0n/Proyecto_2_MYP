@@ -12,13 +12,21 @@ use gtk::{
 };
 use std::rc::Rc;
 
+/// Abre una ventana auxiliar para capturar la ruta a minar.
+///
+/// La ventana solicita un directorio, valida que no este vacio y, al presionar
+/// Minar, ejecuta el callback on_start con la ruta capturada.
+/// Si la ruta esta vacia, muestra un AlertDialog y no cierra la ventana.
+///
+/// # Arguments
+/// app: Instancia de la aplicacion GTK.
+/// on_start: Callback que recibe la ruta ingresada y dispara el proceso de minado.
 pub fn open_mine_window(app: &Application, on_start: Rc<dyn Fn(String)>) {
 
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Ventana de minado")
         .default_width(700)
-        //.default_height(200)
         .build();
 
     let container = GtkBox::new(Orientation::Vertical,12);

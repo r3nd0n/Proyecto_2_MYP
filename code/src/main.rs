@@ -1,6 +1,3 @@
-//use gtk::prelude::*;
-//use gtk::Application;
-
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -10,6 +7,11 @@ use rusqlite::Connection;
 mod view;
 mod model;
 
+/// Convierte el modelo de dominio (AlbumWithSongs) al modelo de presentacion
+/// usado por la capa de vista.
+///
+/// Mantiene los datos principales del album y transforma cada cancion al tipo
+/// SongViewData para que la UI pueda renderizarla sin depender del modelo DB.
 fn map_albums_to_view(albums: Vec<model::db::AlbumWithSongs>) -> Vec<view::view::AlbumViewData> {
     albums
         .into_iter()
@@ -18,16 +20,13 @@ fn map_albums_to_view(albums: Vec<model::db::AlbumWithSongs>) -> Vec<view::view:
             artist: album.artist,
             name: album.name,
             path: album.path,
-            //year: album.year,
             songs: album.songs,
             song_list: album
                 .song_list
                 .into_iter()
                 .map(|song| view::view::SongViewData {
                     title: song.title,
-                    //path: song.path,
                     track: song.track,
-                    //year: song.year,
                     genre: song.genre,
                 })
                 .collect(),
@@ -35,6 +34,14 @@ fn map_albums_to_view(albums: Vec<model::db::AlbumWithSongs>) -> Vec<view::view:
         .collect()
 }
 
+/// Punto de entrada de la aplicacion.
+///
+/// Flujo principal:
+/// - Resuelve la ruta de la base de datos (variable DB_PATH o valor por defecto).
+/// - Asegura el directorio y esquema SQLite.
+/// - Carga los albumes iniciales para la UI.
+/// - Configura callbacks de busqueda y minado.
+/// - Lanza la vista GTK con show_view.
 fn main() {
     let db_path = env::var("DB_PATH").unwrap_or_else(|_| "data/music.db".to_string());
 

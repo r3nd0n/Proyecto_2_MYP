@@ -19,23 +19,24 @@ use crate::view::query::query_generator;
 use super::mine_route;
 use crate::view::styles;
 
-/// Delete all the child widgets from the container.
-/// 
-/// #Arguments
-/// container: the GTK container who all his child widgets
-/// will be eliminated at the end of the function.
+/// Elimina todos los widgets hijos de un contenedor GTK.
+///
+/// # Arguments
+/// container: Contenedor cuyos hijos se eliminan.
 fn clear_children(container: &GtkBox) {
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
 }
 
-/// Actualiza el album de manera detallada en la interfaz
-/// No se crean ventanas nuevas, se reusa target y se relena
-/// con la información.
-/// #Arguments
-/// target: Container GTK donde se van a dibujar los albumes.
-/// album: el album que se va a mostrar.
+/// Renderiza el panel de detalle para un album seleccionado.
+///
+/// Reutiliza el contenedor target (no crea nuevas ventanas) y muestra
+/// metadatos del album junto con su lista de canciones.
+///
+/// # Arguments
+/// target: Contenedor GTK donde se dibuja el detalle.
+/// album: Album a mostrar.
 fn render_album_detail(target: &GtkBox, album: &AlbumViewData) {
     clear_children(target);
 
@@ -107,6 +108,16 @@ fn render_album_detail(target: &GtkBox, album: &AlbumViewData) {
     }
 }
 
+/// Renderiza la lista de albumes y conecta cada fila con el panel de detalle.
+///
+/// Si no hay albumes, muestra mensajes de estado en ambos paneles.
+/// Cuando hay datos, precarga el detalle del primer album y permite cambiarlo
+/// al hacer click sobre cada fila.
+///
+/// # Arguments
+/// albums_list: Contenedor de la lista lateral de albumes.
+/// detail_content: Contenedor del detalle del album seleccionado.
+/// albums: Datos de albumes a renderizar.
 fn render_albums_list(albums_list: &GtkBox, detail_content: &GtkBox, albums: &[AlbumViewData]) {
     clear_children(albums_list);
     clear_children(detail_content);
@@ -156,7 +167,16 @@ fn render_albums_list(albums_list: &GtkBox, detail_content: &GtkBox, albums: &[A
     }
 }
 
-
+/// Construye y presenta la ventana principal de la aplicacion.
+///
+/// Inicializa la estructura visual (buscador, lista de albumes, detalle y boton
+/// de minado), conecta callbacks para busqueda/minado y aplica estilos globales.
+///
+/// # Arguments
+/// app: Instancia de GTK Application.
+/// albums: Albumes iniciales a mostrar.
+/// on_mine: Callback que ejecuta el minado y devuelve albumes refrescados.
+/// on_search: Callback que ejecuta la busqueda y devuelve resultados.
 pub fn design_app(
     app: &Application,
     albums: Vec<AlbumViewData>,
@@ -280,9 +300,6 @@ pub fn design_app(
     search_box.connect_search_changed(move |entry|{
         let search_txt = entry.text().to_string();
         let query = query_generator(&search_txt);
-        //TODO 
-        //conectar la busqueda que entra el usuario con /model 
-        //mediante main.rs.
         let refreshed = on_search_for_click(query);
 
         render_albums_list(&album_list_for_search, &detail_content_for_search, &refreshed);

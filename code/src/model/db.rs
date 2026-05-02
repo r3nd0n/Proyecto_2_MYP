@@ -28,6 +28,11 @@ pub struct AlbumWithSongs {
     pub song_list: Vec<SongSummary>,
 }
 
+/// Inicializa la BD ejecutando schema.sql
+/// 
+/// Activa las foreign keys de SQLite y ejecuta el esquema definido en
+/// schema.sql para asegurar que las tablas y relaciones existan antes
+/// de usar la BD.
 pub fn create_db(conn: &Connection) -> Result<()> {
     conn.execute("PRAGMA foreign_keys = ON;", [])?;
 
@@ -37,7 +42,11 @@ pub fn create_db(conn: &Connection) -> Result<()> {
 }
 
 
-
+/// Inserta o actualiza una cancion en la base de datos.
+/// 
+/// Primero obtiene o crea el artista y el album asociados. Luego busca si ya
+/// existe una rola con el mismo path. Si existe, actualiza sus datos; si no,
+/// inserta una nueva fila.
 pub fn upsert_song(conn: &Connection, song: &SongTag) -> Result<()> {
     let performer_id = get_or_create_performer(conn, &song.artist)?;
     let album_id = get_or_create_album(conn, song)?;
@@ -89,6 +98,10 @@ pub fn upsert_song(conn: &Connection, song: &SongTag) -> Result<()> {
     Ok(())
 }
 
+/// Obtiene un listado resumido de albumes.
+///
+/// Devuelve una colección de AlbumSummary con el id del album, nombre,
+/// ruta, numero de canciones y nombre del artista principal o concatenado.
 pub fn get_albums(conn: &Connection) -> Result<Vec<AlbumSummary>> {
     let mut stmt = conn.prepare(
     "SELECT a.id_album,
@@ -119,6 +132,10 @@ pub fn get_albums(conn: &Connection) -> Result<Vec<AlbumSummary>> {
     rows.collect()
 }
 
+/// Obtiene todas las canciones de un álbum específico.
+///
+/// Recupera las canciones asociadas al album_id recibido y las ordena por pista
+/// y luego por título para mostrarlas de forma consistente en la UI.
 pub fn get_songs_for_album(conn: &Connection, album_id: i64) -> Result<Vec<SongSummary>> {
     let mut stmt = conn.prepare(
         "SELECT title, path, track, year, genre
@@ -138,6 +155,10 @@ pub fn get_songs_for_album(conn: &Connection, album_id: i64) -> Result<Vec<SongS
     rows.collect()
 }
 
+/// Obtiene albumes completos con su lista de canciones.
+///
+/// Usa get_albums para obtener el resumen de albumes y luego completa cada
+/// uno con su lista de canciones mediante get_songs_for_album.
 pub fn get_albums_with_songs(conn: &Connection) -> Result<Vec<AlbumWithSongs>> {
     let albums = get_albums(conn)?;
     let mut result = Vec::with_capacity(albums.len());
@@ -157,6 +178,10 @@ pub fn get_albums_with_songs(conn: &Connection) -> Result<Vec<AlbumWithSongs>> {
     Ok(result)
 }
 
+/// Busca un artista por nombre y, si no existe, lo crea.
+///
+/// Devuelve el id_performer correspondiente al nombre recibido. Se usa para
+/// asegurar que cada cancion quede vinculada a un artista valido.
 fn get_or_create_performer(conn: &Connection, artist: &str) -> Result<i64> {
     if let Some(id) = conn
         .query_row(
@@ -177,6 +202,10 @@ fn get_or_create_performer(conn: &Connection, artist: &str) -> Result<i64> {
     Ok(conn.last_insert_rowid())
 }
 
+/// Busca un album por ruta, nombre y año, y si no existe lo crea.
+///
+/// La ruta se deriva del archivo de la cancion. Si el album ya existe, devuelve
+/// su id; si no, inserta uno nuevo y retorna el identificador generado.
 fn get_or_create_album(conn: &Connection, song: &SongTag) -> Result<i64> {
     let album_path = Path::new(&song.file_path)
         .parent()
@@ -204,4 +233,124 @@ fn get_or_create_album(conn: &Connection, song: &SongTag) -> Result<i64> {
         params![album_path, song.album, song.year],
     )?;
     Ok(conn.last_insert_rowid())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_song(
+        artist: &str,
+        album: &str,
+        title: &str,
+        path: &str,
+        track: Option<i32>,
+    ) -> SongTag {
+        SongTag {
+            file_path: path.to_string(),
+            title: title.to_string(),
+            artist: artist.to_string(),
+            album: album.to_string(),
+            genre: "Rock".to_string(),
+            track,
+            year: Some(1991),
+        }
+    }
+
+    #[test]
+    fn create_db_creates_schema_tables() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        create_db(&conn)?;
+
+        let table_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('albums', 'performers', 'rolas')",
+            [],
+            |row| row.get(0),
+        )?;
+
+        assert_eq!(table_count, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn upsert_song_inserts_and_updates_same_path() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        create_db(&conn)?;
+
+        let first = sample_song(
+            "Nirvana",
+            "Nevermind",
+            "Smells Like Teen Spirit",
+            "/tmp/music/nirvana/song.mp3",
+            Some(1),
+        );
+        upsert_song(&conn, &first)?;
+
+        let updated = sample_song(
+            "Nirvana",
+            "Nevermind",
+            "Come As You Are",
+            "/tmp/music/nirvana/song.mp3",
+            Some(2),
+        );
+        upsert_song(&conn, &updated)?;
+
+        let rows: i64 = conn.query_row("SELECT COUNT(*) FROM rolas", [], |row| row.get(0))?;
+        assert_eq!(rows, 1);
+
+        let title: String = conn.query_row(
+            "SELECT title FROM rolas WHERE path = ?1",
+            ["/tmp/music/nirvana/song.mp3"],
+            |row| row.get(0),
+        )?;
+        assert_eq!(title, "Come As You Are");
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_albums_and_songs_return_expected_data() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        create_db(&conn)?;
+
+        upsert_song(
+            &conn,
+            &sample_song(
+                "Red Hot Chili Peppers",
+                "Californication",
+                "Around the World",
+                "/tmp/rhcp/californication/01.mp3",
+                Some(1),
+            ),
+        )?;
+        upsert_song(
+            &conn,
+            &sample_song(
+                "Red Hot Chili Peppers",
+                "Californication",
+                "Scar Tissue",
+                "/tmp/rhcp/californication/02.mp3",
+                Some(2),
+            ),
+        )?;
+
+        let albums = get_albums(&conn)?;
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].name, "Californication");
+        assert_eq!(albums[0].songs, 2);
+        assert_eq!(albums[0].artist, "Red Hot Chili Peppers");
+
+        let songs = get_songs_for_album(&conn, albums[0].id_album)?;
+        assert_eq!(songs.len(), 2);
+        assert_eq!(songs[0].title, "Around the World");
+        assert_eq!(songs[0].track, Some(1));
+        assert_eq!(songs[1].title, "Scar Tissue");
+        assert_eq!(songs[1].track, Some(2));
+
+        let albums_with_songs = get_albums_with_songs(&conn)?;
+        assert_eq!(albums_with_songs.len(), 1);
+        assert_eq!(albums_with_songs[0].song_list.len(), 2);
+
+        Ok(())
+    }
 }

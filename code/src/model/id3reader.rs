@@ -2,6 +2,10 @@ use id3::{Tag, TagLike};
 use std::path::Path;
 use super::songtag::SongTag;
 
+/// Normaliza un valor de texto leido desde una etiqueta ID3.
+///
+/// Si el valor es None, devuelve Unknown.
+/// Si el texto solo contiene espacios o caracteres de control, tambien devuelve Unknown.
 fn normalize_text(value: Option<&str>) -> String {
     value
         .filter(|text| text.chars().any(|ch| !ch.is_whitespace() && !ch.is_control()))
@@ -9,6 +13,10 @@ fn normalize_text(value: Option<&str>) -> String {
         .unwrap_or_else(|| "Unknown".to_string())
 }
 
+/// Lee la informacion ID3 de un archivo y la convierte en SongTag.
+///
+/// Extrae titulo, artista, album, genero, pista y año desde la etiqueta del archivo.
+/// Si la lectura falla, devuelve None y escribe un mensaje en consola.
 pub fn id3_reader(path: &Path) -> Option<SongTag> {
     match Tag::read_from_path(path) {
         Ok(tag) => {
@@ -27,11 +35,11 @@ pub fn id3_reader(path: &Path) -> Option<SongTag> {
                 genre,
                 track,
                 year,
-            }) // En caso de lectura correcta, devolvemos la estructura SongTag
+            }) 
         }
         Err(err) => {
-            println!("No se pudó leer de la etiqueta ID3: {err}");
-            None // En caso de fallar la lectura
+            println!("No se pudo leer la etiqueta ID3: {err}");
+            None
         }
     }
 }

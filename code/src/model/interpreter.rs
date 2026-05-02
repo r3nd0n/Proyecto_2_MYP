@@ -1,6 +1,12 @@
 use rusqlite::{params_from_iter, Connection, Result};
 use crate::model::db::{self, AlbumSummary, AlbumWithSongs};
 
+
+/// Genera una clausula SQL a partir de una cadena recibida
+/// desde la GUI.
+/// 
+/// #Arguments
+/// input: cadena a leer para generar la consulta.
 fn album_query_sql_from_input(input: &str) -> (String, Vec<String>) {
 	let mut sql = String::from(
 		"SELECT a.id_album,
@@ -78,6 +84,10 @@ fn album_query_sql_from_input(input: &str) -> (String, Vec<String>) {
 	(sql, params)
 }
 
+/// Ejecuta la busqueda construida desde la cadena urawu.
+/// Hace uso de album_query_sql_from_input para la consulta SQL.
+///
+/// Retorna un Vec<AlbumWithSongs> con los albumes que cumplen la consulta.
 pub fn search_from_raw(conn: &Connection, raw: &str) -> Result<Vec<AlbumWithSongs>> {
 	let (sql, params) = album_query_sql_from_input(raw);
 	let mut stmt = conn.prepare(&sql)?;
