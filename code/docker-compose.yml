@@ -1,10 +1,13 @@
 services:
   app:
     build: .
+    env_file: .env
     environment:
       DISPLAY: ${DISPLAY}
-      DB_PATH: /app/data/music.db
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./data:/app/data
-    network_mode: host
+      - ./music:/music:ro
+    # network_mode: host
+    # Note: `network_mode: host` was commented out to improve portability.
+    # Uncomment if your environment requires host networking for X11.

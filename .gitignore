@@ -1,1 +1,9 @@
 **/target/
+
+code/.env
+code/music.db
+code/data/*.db
+code/music/*
+
+!code/data/.gitkeep
+!code/music/.gitkeep
